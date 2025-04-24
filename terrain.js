@@ -65,16 +65,43 @@ class Terrain {
         ground.material = groundMaterial;
         ground.checkCollisions = true;
 
-        // 创建多个平台
+        // 创建中心平台群
         this.createPlatform(0, 2, 0, 10, 1, 10, 0.4, 0.6, 0.4); // 中心平台
-        this.createPlatform(-15, 4, -15, 8, 1, 8, 0.6, 0.4, 0.4); // 左上平台
-        this.createPlatform(15, 6, -20, 6, 1, 6, 0.4, 0.4, 0.6); // 右上平台
-        this.createPlatform(-20, 8, 15, 5, 1, 5, 0.6, 0.6, 0.4); // 左下平台
-        this.createPlatform(20, 10, 20, 4, 1, 4, 0.4, 0.6, 0.6); // 右下平台
+        this.createPlatform(-8, 4, -8, 6, 1, 6, 0.6, 0.4, 0.4); // 左上平台
+        this.createPlatform(8, 4, -8, 6, 1, 6, 0.4, 0.4, 0.6); // 右上平台
+        this.createPlatform(-8, 4, 8, 6, 1, 6, 0.6, 0.6, 0.4); // 左下平台
+        this.createPlatform(8, 4, 8, 6, 1, 6, 0.4, 0.6, 0.6); // 右下平台
+
+        // 创建第二层平台群
+        this.createPlatform(-15, 6, -15, 4, 1, 4, 0.6, 0.4, 0.4); // 左上第二层
+        this.createPlatform(15, 6, -15, 4, 1, 4, 0.4, 0.4, 0.6); // 右上第二层
+        this.createPlatform(-15, 6, 15, 4, 1, 4, 0.6, 0.6, 0.4); // 左下第二层
+        this.createPlatform(15, 6, 15, 4, 1, 4, 0.4, 0.6, 0.6); // 右下第二层
+
+        // 创建第三层平台群
+        this.createPlatform(-20, 8, -20, 3, 1, 3, 0.6, 0.4, 0.4); // 左上第三层
+        this.createPlatform(20, 8, -20, 3, 1, 3, 0.4, 0.4, 0.6); // 右上第三层
+        this.createPlatform(-20, 8, 20, 3, 1, 3, 0.6, 0.6, 0.4); // 左下第三层
+        this.createPlatform(20, 8, 20, 3, 1, 3, 0.4, 0.6, 0.6); // 右下第三层
+
+        // 创建连接平台
+        this.createPlatform(-5, 3, 0, 4, 1, 4, 0.5, 0.5, 0.5); // 左连接平台
+        this.createPlatform(5, 3, 0, 4, 1, 4, 0.5, 0.5, 0.5); // 右连接平台
+        this.createPlatform(0, 3, -5, 4, 1, 4, 0.5, 0.5, 0.5); // 前连接平台
+        this.createPlatform(0, 3, 5, 4, 1, 4, 0.5, 0.5, 0.5); // 后连接平台
+
+        // 创建高台
+        this.createPlatform(0, 10, 0, 3, 1, 3, 0.8, 0.2, 0.2); // 中心高台
+        this.createPlatform(-15, 12, -15, 2, 1, 2, 0.8, 0.2, 0.2); // 左上高台
+        this.createPlatform(15, 12, -15, 2, 1, 2, 0.8, 0.2, 0.2); // 右上高台
+        this.createPlatform(-15, 12, 15, 2, 1, 2, 0.8, 0.2, 0.2); // 左下高台
+        this.createPlatform(15, 12, 15, 2, 1, 2, 0.8, 0.2, 0.2); // 右下高台
 
         // 创建斜坡
         this.createRamp(5, 2, 10, 10, 1, 5, Math.PI / 4, 0.5, 0.5, 0.5); // 中心到右上
         this.createRamp(-5, 2, -10, 10, 1, 5, -Math.PI / 4, 0.5, 0.5, 0.5); // 中心到左上
+        this.createRamp(10, 2, 5, 10, 1, 5, Math.PI / 4, 0.5, 0.5, 0.5); // 中心到右下
+        this.createRamp(-10, 2, -5, 10, 1, 5, -Math.PI / 4, 0.5, 0.5, 0.5); // 中心到左下
     }
 
     createPlatform(x, y, z, width, height, depth, r, g, b) {

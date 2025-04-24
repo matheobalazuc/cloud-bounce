@@ -75,8 +75,8 @@ class Game {
         // 更新玩家平台状态
         this.player.setOnPlatform(isOnPlatform);
         
-        // 更新游戏对象
-        this.gameObjects.update();
+        // 更新游戏对象，传递子弹信息
+        this.gameObjects.update(this.player.bullets);
     }
 
     // 导入新的地形模型

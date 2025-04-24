@@ -31,6 +31,10 @@ class Player {
         this.cameraSmoothFactor = 0.1; // 添加相机平滑因子
         this.cameraOffset = new BABYLON.Vector3(0, 0, 0); // 添加相机偏移量
         this.firstPersonViewDistance = 40; // 第一人称视角距离
+        this.bullets = []; // 存储所有子弹
+        this.bulletSpeed = 0.5; // 子弹速度
+        this.bulletSize = 0.2; // 子弹大小
+        this.bulletLifetime = 100; // 子弹生命周期（帧数）
 
         // 创建玩家模型
         this.mesh = BABYLON.MeshBuilder.CreateBox("player", {
@@ -56,6 +60,13 @@ class Player {
 
         // 初始化控制
         this.initializeControls();
+
+        // 添加鼠标点击事件监听
+        scene.onPointerDown = (evt) => {
+            if (evt.button === 0) { // 左键点击
+                this.shoot();
+            }
+        };
     }
 
     initializeControls() {
@@ -235,6 +246,9 @@ class Player {
             targetPosition.y += this.cameraTargetHeight;
             this.camera.setTarget(targetPosition);
         }
+
+        // 更新子弹
+        this.updateBullets();
     }
 
     // 设置是否在平台上
@@ -247,6 +261,63 @@ class Player {
         } else if (!isOnPlatform && this.isOnPlatform) {
             // 刚离开平台
             this.isOnPlatform = false;
+        }
+    }
+
+    // 发射子弹
+    shoot() {
+        // 创建子弹
+        const bullet = BABYLON.MeshBuilder.CreateSphere("bullet", {
+            diameter: this.bulletSize,
+            segments: 16
+        }, this.scene);
+        
+        // 设置子弹位置（从玩家前方发射）
+        const forward = new BABYLON.Vector3(
+            Math.sin(this.playerRotation) * Math.cos(this.playerVerticalRotation),
+            Math.sin(this.playerVerticalRotation),
+            Math.cos(this.playerRotation) * Math.cos(this.playerVerticalRotation)
+        );
+        
+        // 从玩家眼睛位置发射
+        bullet.position = this.mesh.position.clone();
+        bullet.position.y += this.eyeHeight; // 从眼睛高度发射
+        bullet.position.addInPlace(forward.scale(1.5)); // 从前方1.5单位处发射
+        
+        // 设置子弹材质
+        const bulletMaterial = new BABYLON.StandardMaterial("bulletMaterial", this.scene);
+        bulletMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0);
+        bulletMaterial.emissiveColor = new BABYLON.Color3(0.5, 0, 0);
+        bullet.material = bulletMaterial;
+        
+        // 设置子弹速度和方向（跟随视角）
+        const bulletVelocity = forward.scale(this.bulletSpeed);
+        
+        // 添加子弹到列表
+        this.bullets.push({
+            mesh: bullet,
+            velocity: bulletVelocity,
+            lifetime: this.bulletLifetime
+        });
+    }
+
+    // 更新子弹状态
+    updateBullets() {
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+            
+            // 移动子弹
+            bullet.mesh.position.addInPlace(bullet.velocity);
+            
+            // 减少生命周期
+            bullet.lifetime--;
+            
+            // 如果子弹生命周期结束或飞出太远，移除子弹
+            if (bullet.lifetime <= 0 || 
+                bullet.mesh.position.length() > 100) { // 如果子弹飞出100单位远
+                bullet.mesh.dispose();
+                this.bullets.splice(i, 1);
+            }
         }
     }
 }

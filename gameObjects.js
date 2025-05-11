@@ -72,61 +72,64 @@ class GameObjects {
 
     // 创建移动平台
     createMovingPlatforms() {
-        // 创建一些移动的平台
-        for (let i = 0; i < 3; i++) {
-            const platform = BABYLON.MeshBuilder.CreateBox("movingPlatform" + i, {
-                width: 4,
-                height: 0.5,
-                depth: 4
-            }, this.scene);
-            
-            platform.position = new BABYLON.Vector3(
-                Math.random() * 20 - 10,
-                3 + i * 2,
-                Math.random() * 20 - 10
-            );
-            
-            // 设置碰撞检测
-            platform.checkCollisions = true;
-            platform.isPickable = true;
-            platform.ellipsoid = new BABYLON.Vector3(2, 0.25, 2); // 增加碰撞体积
-            platform.ellipsoidOffset = new BABYLON.Vector3(0, 0.25, 0);
-            
-            // 添加材质
-            const material = new BABYLON.StandardMaterial("platformMaterial", this.scene);
-            material.diffuseColor = new BABYLON.Color3(0.4, 0.6, 0.8);
-            platform.material = material;
-            
-            // 创建移动动画
-            const animation = new BABYLON.Animation(
-                "platformAnimation",
-                "position",
-                30,
-                BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
-                BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
-            );
-            
-            const startPos = platform.position.clone();
-            const keyFrames = [];
-            keyFrames.push({
-                frame: 0,
-                value: startPos
-            });
-            keyFrames.push({
-                frame: 30,
-                value: startPos.add(new BABYLON.Vector3(0, 2, 0))
-            });
-            keyFrames.push({
-                frame: 60,
-                value: startPos
-            });
-            
-            animation.setKeys(keyFrames);
-            platform.animations.push(animation);
-            this.scene.beginAnimation(platform, 0, 60, true);
-            
-            this.movingPlatforms.push(platform);
-        }
+        // 创建一个测试用的移动平台
+        const platform = BABYLON.MeshBuilder.CreateBox("movingPlatform", {
+            width: 4,
+            height: 0.5,
+            depth: 4,
+            updatable: true
+        }, this.scene);
+        
+        platform.position = new BABYLON.Vector3(5, 3, 0);
+        
+        // 设置精确的碰撞盒
+        platform.computeWorldMatrix(true);
+        platform.refreshBoundingInfo();
+        
+        // 设置碰撞检测
+        platform.checkCollisions = true;
+        platform.isPickable = true;
+        
+        // 存储平台的实际尺寸
+        platform.metadata = {
+            width: 4,
+            height: 0.5,
+            depth: 4
+        };
+        
+        // 添加材质
+        const material = new BABYLON.StandardMaterial("platformMaterial", this.scene);
+        material.diffuseColor = new BABYLON.Color3(0.4, 0.6, 0.8);
+        platform.material = material;
+        
+        // 创建上下移动动画
+        const animation = new BABYLON.Animation(
+            "platformAnimation",
+            "position.y",
+            30,
+            BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+            BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+        );
+        
+        const keyFrames = [];
+        keyFrames.push({
+            frame: 0,
+            value: 3
+        });
+        keyFrames.push({
+            frame: 30,
+            value: 5
+        });
+        keyFrames.push({
+            frame: 60,
+            value: 3
+        });
+        
+        animation.setKeys(keyFrames);
+        platform.animations.push(animation);
+        this.scene.beginAnimation(platform, 0, 60, true);
+        
+        this.movingPlatforms.push(platform);
     }
 
     // 创建可击毁的目标
@@ -321,7 +324,6 @@ class GameObjects {
             const distance = BABYLON.Vector3.Distance(playerPosition, collectible.position);
             
             if (distance < 1) {
-                // 收集物品
                 collectible.dispose();
                 this.collectibles.splice(i, 1);
                 this.score += 10;
@@ -329,33 +331,71 @@ class GameObjects {
             }
         }
 
-        // 检查与移动平台的碰撞
-        for (const platform of this.movingPlatforms) {
+        // 检查与所有平台的碰撞
+        const allPlatforms = [...this.movingPlatforms, ...this.scene.meshes.filter(mesh => 
+            mesh.id.startsWith("platform_") || 
+            mesh.id.startsWith("bridge_") || 
+            mesh.id.startsWith("ramp_") ||
+            mesh.id.startsWith("cloud_")
+        )];
+
+        for (const platform of allPlatforms) {
+            if (!platform.metadata) continue;
+
             const platformPos = platform.position;
-            const platformBounds = {
-                minX: platformPos.x - 2, // 减小检测范围，使检测更精确
-                maxX: platformPos.x + 2,
-                minY: platformPos.y - 0.25,
-                maxY: platformPos.y + 0.25,
-                minZ: platformPos.z - 2,
-                maxZ: platformPos.z + 2
-            };
+            const width = platform.metadata.width;
+            const height = platform.metadata.height;
+            const depth = platform.metadata.depth;
 
-            // 检查玩家是否在平台上方
-            const isAbovePlatform = 
-                playerPosition.x >= platformBounds.minX && 
-                playerPosition.x <= platformBounds.maxX &&
-                playerPosition.z >= platformBounds.minZ && 
-                playerPosition.z <= platformBounds.maxZ;
+            // 玩家碰撞体积参数
+            const playerHalfWidth = 0.4;  // 减小玩家碰撞体积
+            const playerHeight = 1.0;
+            const playerBottom = playerPosition.y - playerHeight/2;
+            const playerTop = playerPosition.y + playerHeight/2;
 
-            // 检查玩家是否刚好在平台表面
-            const isOnPlatformSurface = 
-                playerPosition.y >= platformBounds.maxY - 0.2 && // 增加下方容差
-                playerPosition.y <= platformBounds.maxY + 0.2 && // 减小上方检测范围
-                playerVelocity.y <= 0;
+            // 计算平台表面高度（考虑旋转）
+            let surfaceY = platformPos.y + height/2;
+            
+            // 计算平台边界（考虑旋转）
+            let minX, maxX, minZ, maxZ;
+            if (platform.rotation && platform.rotation.y !== 0) {
+                // 对于旋转的平台，使用更大的碰撞盒
+                const maxDim = Math.max(width, depth);
+                minX = platformPos.x - maxDim/2;
+                maxX = platformPos.x + maxDim/2;
+                minZ = platformPos.z - maxDim/2;
+                maxZ = platformPos.z + maxDim/2;
+            } else {
+                minX = platformPos.x - width/2;
+                maxX = platformPos.x + width/2;
+                minZ = platformPos.z - depth/2;
+                maxZ = platformPos.z + depth/2;
+            }
 
-            if (isAbovePlatform && isOnPlatformSurface) {
-                // 玩家在平台上方，让玩家跟随平台移动
+            // 检查水平碰撞（更严格的检测）
+            const isOverlappingHorizontally = 
+                playerPosition.x + playerHalfWidth > minX && 
+                playerPosition.x - playerHalfWidth < maxX &&
+                playerPosition.z + playerHalfWidth > minZ && 
+                playerPosition.z - playerHalfWidth < maxZ;
+
+            // 检查垂直碰撞（更精确的检测）
+            const isOnSurface = 
+                playerBottom <= surfaceY + 0.1 && // 增加一点向上的容差
+                playerBottom >= surfaceY - 0.1 && // 增加一点向下的容差
+                playerVelocity.y <= 0;            // 确保玩家在下落
+
+            if (isOverlappingHorizontally && isOnSurface) {
+                // 将玩家固定在平台表面
+                playerPosition.y = surfaceY + playerHeight/2;
+
+                // 如果是移动平台，让玩家跟随平台移动
+                if (platform.id.startsWith("movingPlatform")) {
+                    const platformVelocity = platform.position.subtract(platform.previousPosition || platform.position);
+                    playerPosition.addInPlace(platformVelocity);
+                    platform.previousPosition = platform.position.clone();
+                }
+
                 return true;
             }
         }

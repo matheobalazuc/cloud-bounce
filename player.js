@@ -58,6 +58,9 @@ class Player {
         this.camera.ellipsoid = new BABYLON.Vector3(0.5, 0.5, 0.5);
         this.camera.ellipsoidOffset = new BABYLON.Vector3(0, 0.5, 0); // 添加相机碰撞体积偏移
 
+        // 添加准星GUI
+        this.createCrosshair();
+
         // 初始化控制
         this.initializeControls();
 
@@ -169,15 +172,19 @@ class Player {
         }
 
         // 处理跳跃
-        if (this.keys[" "] && !this.isJumping && !this.isOnPlatform) {
-            this.playerVelocity.y = this.jumpForce;
-            this.isJumping = true;
-            this.isOnPlatform = false;
+        if (this.keys[" "]) {
+            // 当在地面或平台上时都可以跳跃
+            if (!this.isJumping || this.isOnPlatform) {
+                this.playerVelocity.y = this.jumpForce;
+                this.isJumping = true;
+                this.isOnPlatform = false;
+            }
         }
 
         // 处理视角切换
         if (this.keys["v"] && !this.keys["v_prev"]) {
             this.isFirstPerson = !this.isFirstPerson;
+            this.updateCrosshairVisibility();
         }
         this.keys["v_prev"] = this.keys["v"];
 
@@ -253,14 +260,18 @@ class Player {
 
     // 设置是否在平台上
     setOnPlatform(isOnPlatform) {
-        if (isOnPlatform && !this.isOnPlatform) {
-            // 刚站上平台
+        if (isOnPlatform) {
+            // 站在平台上时重置跳跃状态
             this.isJumping = false;
             this.playerVelocity.y = 0;
             this.isOnPlatform = true;
-        } else if (!isOnPlatform && this.isOnPlatform) {
+        } else if (this.isOnPlatform) {
             // 刚离开平台
             this.isOnPlatform = false;
+            // 不要立即设置isJumping为true，让玩家有机会在离开平台边缘时跳跃
+            if (this.playerVelocity.y < 0) {
+                this.isJumping = true;
+            }
         }
     }
 
@@ -318,6 +329,45 @@ class Player {
                 bullet.mesh.dispose();
                 this.bullets.splice(i, 1);
             }
+        }
+    }
+
+    // 在Player类中添加新方法
+    createCrosshair() {
+        // 创建GUI
+        const guiTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+        
+        // 创建准星容器
+        const crosshairContainer = new BABYLON.GUI.Rectangle();
+        crosshairContainer.width = "20px";
+        crosshairContainer.height = "20px";
+        guiTexture.addControl(crosshairContainer);
+
+        // 创建水平线
+        const horizontalLine = new BABYLON.GUI.Rectangle();
+        horizontalLine.width = "12px";
+        horizontalLine.height = "2px";
+        horizontalLine.background = "white";
+        horizontalLine.alpha = 0.8;
+        crosshairContainer.addControl(horizontalLine);
+
+        // 创建垂直线
+        const verticalLine = new BABYLON.GUI.Rectangle();
+        verticalLine.width = "2px";
+        verticalLine.height = "12px";
+        verticalLine.background = "white";
+        verticalLine.alpha = 0.8;
+        crosshairContainer.addControl(verticalLine);
+
+        // 在第三人称模式下隐藏准星
+        this.crosshairContainer = crosshairContainer;
+        this.updateCrosshairVisibility();
+    }
+
+    // 添加新方法来更新准星可见性
+    updateCrosshairVisibility() {
+        if (this.crosshairContainer) {
+            this.crosshairContainer.isVisible = this.isFirstPerson;
         }
     }
 }

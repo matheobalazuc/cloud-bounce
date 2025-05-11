@@ -67,6 +67,14 @@ class Terrain {
         groundMat.diffuseColor = new BABYLON.Color3(0.3, 0.5, 0.3);
         ground.material = groundMat;
         ground.checkCollisions = true;
+
+        // 添加地面的metadata
+        ground.metadata = {
+            width: 200,
+            height: 0,  // 地面的高度为0
+            depth: 200
+        };
+
         this.grounds.push(ground);
 
         // 中心区域 - 创建螺旋上升的平台

@@ -9,13 +9,16 @@
 
 // 游戏对象管理类
 class GameObjects {
-    constructor(scene) {
+    constructor(scene, game) {
         this.scene = scene;
+        this.game = game;
         this.collectibles = [];
         this.movingPlatforms = [];
         this.targets = [];
         this.fragments = []; // 添加碎片数组
         this.score = 0;
+        this.playerHighestY = 0;
+        this.isPlayerFalling = false;  // 添加这一行，用于跟踪玩家是否在下落
         this.createCollectibles();
         this.createMovingPlatforms();
         this.createTargets();
@@ -286,30 +289,37 @@ class GameObjects {
 
     // 检查子弹碰撞
     checkBulletCollisions(bullets) {
+        if (!bullets || bullets.length === 0) return; // 添加安全检查
+        
+        // 检查每个子弹
         for (let i = bullets.length - 1; i >= 0; i--) {
             const bullet = bullets[i];
+            if (!bullet || !bullet.mesh) continue; // 添加安全检查
             
-            // 检查子弹与目标的碰撞
+            // 检查与目标的碰撞
             for (let j = this.targets.length - 1; j >= 0; j--) {
                 const target = this.targets[j];
+                if (!target || !target.position) continue; // 添加安全检查
+                
                 const distance = BABYLON.Vector3.Distance(bullet.mesh.position, target.position);
                 
-                if (distance < 1.5) {
-                    // 创建碎片效果
-                    this.createTargetFragments(target.position);
-                    
-                    // 击毁目标
+                if (distance < 1.5) {  // 如果子弹击中目标
+                    // 销毁目标
                     target.dispose();
                     this.targets.splice(j, 1);
+                    
+                    // 增加分数和经验
+                    this.score += 30;
+                    this.game.gainExperience(30); // 击毁目标获得经验
+                    
+                    // 创建爆炸效果
+                    this.createDestroyEffect(target.position);
                     
                     // 移除子弹
                     bullet.mesh.dispose();
                     bullets.splice(i, 1);
                     
-                    // 增加分数
-                    this.score += 20;
-                    console.log("Target destroyed! Score:", this.score);
-                    
+                    console.log("Target destroyed by bullet! Score:", this.score);
                     break;
                 }
             }
@@ -318,29 +328,28 @@ class GameObjects {
 
     // 检查碰撞
     checkCollisions(playerPosition, playerVelocity) {
-        // 检查与可收集物的碰撞
-        for (let i = this.collectibles.length - 1; i >= 0; i--) {
-            const collectible = this.collectibles[i];
-            const distance = BABYLON.Vector3.Distance(playerPosition, collectible.position);
-            
-            if (distance < 1) {
-                collectible.dispose();
-                this.collectibles.splice(i, 1);
-                this.score += 10;
-                console.log("Score:", this.score);
+        // 更新玩家最高点和下落状态
+        if (playerVelocity.y < 0) {  // 玩家开始下落
+            this.isPlayerFalling = true;
+            if (playerPosition.y > this.playerHighestY) {
+                this.playerHighestY = playerPosition.y;
             }
         }
 
-        // 检查与所有平台的碰撞
+        // 检查与所有平台的碰撞（包括地面）
         const allPlatforms = [...this.movingPlatforms, ...this.scene.meshes.filter(mesh => 
             mesh.id.startsWith("platform_") || 
             mesh.id.startsWith("bridge_") || 
             mesh.id.startsWith("ramp_") ||
-            mesh.id.startsWith("cloud_")
+            mesh.id.startsWith("cloud_") ||
+            mesh.id === "mainGround"
         )];
 
         for (const platform of allPlatforms) {
-            if (!platform.metadata) continue;
+            if (!platform.metadata) {
+                console.warn("Platform missing metadata:", platform.id);
+                continue;
+            }
 
             const platformPos = platform.position;
             const width = platform.metadata.width;
@@ -385,22 +394,81 @@ class GameObjects {
                 playerBottom >= surfaceY - 0.1 && // 增加一点向下的容差
                 playerVelocity.y <= 0;            // 确保玩家在下落
 
+            // 在检测到与平台碰撞时（玩家着陆）
             if (isOverlappingHorizontally && isOnSurface) {
                 // 将玩家固定在平台表面
                 playerPosition.y = surfaceY + playerHeight/2;
 
-                // 如果是移动平台，让玩家跟随平台移动
-                if (platform.id.startsWith("movingPlatform")) {
-                    const platformVelocity = platform.position.subtract(platform.previousPosition || platform.position);
-                    playerPosition.addInPlace(platformVelocity);
-                    platform.previousPosition = platform.position.clone();
+                // 如果玩家正在下落，计算坠落伤害
+                if (this.isPlayerFalling) {
+                    const fallHeight = this.playerHighestY - playerPosition.y;
+                    console.log("Fall height:", fallHeight, "Highest Y:", this.playerHighestY, "Current Y:", playerPosition.y);
+                    if (fallHeight > 5) {
+                        const damage = Math.floor(fallHeight * 5);
+                        console.log("Calculating damage:", damage);
+                        this.game.takeFallDamage(damage);
+                    }
+                    // 重置下落状态和最高点
+                    this.isPlayerFalling = false;
+                    this.playerHighestY = playerPosition.y;
                 }
 
                 return true;
             }
         }
 
+        // 如果玩家在空中且向上移动，重置最高点
+        if (playerVelocity.y > 0) {
+            this.playerHighestY = playerPosition.y;
+        }
+
+        // 检查目标碰撞
+        for (let i = this.targets.length - 1; i >= 0; i--) {
+            const target = this.targets[i];
+            const distance = BABYLON.Vector3.Distance(playerPosition, target.position);
+            
+            if (distance < 2) {
+                target.dispose();
+                this.targets.splice(i, 1);
+                this.score += 20;
+                this.game.gainExperience(20); // 使用 game 引用
+                console.log("Target destroyed! Score:", this.score);
+                
+                // 可以在这里添加粒子效果
+                this.createDestroyEffect(target.position);
+            }
+        }
+        
         return false;
+    }
+
+    // 添加销毁效果
+    createDestroyEffect(position) {
+        const particleSystem = new BABYLON.ParticleSystem("particles", 2000, this.scene);
+        particleSystem.particleTexture = new BABYLON.Texture("textures/flare.png", this.scene);
+        particleSystem.emitter = position;
+        particleSystem.minEmitBox = new BABYLON.Vector3(-0.5, -0.5, -0.5);
+        particleSystem.maxEmitBox = new BABYLON.Vector3(0.5, 0.5, 0.5);
+        particleSystem.color1 = new BABYLON.Color4(1, 0.5, 0, 1.0);
+        particleSystem.color2 = new BABYLON.Color4(1, 0.5, 0, 1.0);
+        particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
+        particleSystem.minSize = 0.1;
+        particleSystem.maxSize = 0.5;
+        particleSystem.minLifeTime = 0.3;
+        particleSystem.maxLifeTime = 1.5;
+        particleSystem.emitRate = 300;
+        particleSystem.gravity = new BABYLON.Vector3(0, -9.81, 0);
+        particleSystem.direction1 = new BABYLON.Vector3(-1, 1, -1);
+        particleSystem.direction2 = new BABYLON.Vector3(1, 1, 1);
+        particleSystem.minEmitPower = 1;
+        particleSystem.maxEmitPower = 3;
+        particleSystem.start();
+
+        // 一段时间后停止并销毁粒子系统
+        setTimeout(() => {
+            particleSystem.stop();
+            setTimeout(() => particleSystem.dispose(), 2000);
+        }, 300);
     }
 
     update(bullets) {
